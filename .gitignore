@@ -5,6 +5,8 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 .cache/
+.DS_Store
 
 # Local/generated workflow output
 outputs/
+
