@@ -1,6 +1,9 @@
 from argparse import ArgumentParser, ArgumentTypeError
 from pathlib import Path
 
+import numpy as np
+from PIL import Image
+
 
 def positive_int(value: str) -> int:
     try:
@@ -12,6 +15,12 @@ def positive_int(value: str) -> int:
         raise ArgumentTypeError("must be greater than zero")
 
     return parsed
+
+
+def load_rgb_image(path: Path) -> np.ndarray:
+    with Image.open(path) as image:
+        rgb_image = image.convert("RGB")
+        return np.asarray(rgb_image, dtype=np.float32) / 255.0
 
 
 def build_parser() -> ArgumentParser:
@@ -41,17 +50,24 @@ def build_parser() -> ArgumentParser:
         type=positive_int,
         help="Number of colors to use in the output palette.",
     )
+    parser.add_argument(
+        "algorithm",
+        choices=("kmeans-rgb", "median-cut", "pillow"),
+        help="Downsampling algorithm to use.",
+    )
     return parser
 
 
 def main() -> None:
     args = build_parser().parse_args()
+    image_data = load_rgb_image(args.input_image_path)
 
     args.output_directory_path.mkdir(parents=True, exist_ok=True)
     print(
         "Ready to process "
         f"{args.input_image_path} -> {args.output_directory_path} "
-        f"({args.rows} rows, {args.columns} columns, {args.colors} colors)"
+        f"({args.rows} rows, {args.columns} columns, {args.colors} colors, "
+        f"{args.algorithm} algorithm, {image_data.shape} image)"
     )
 
 
