@@ -4,7 +4,49 @@ from pathlib import Path
 
 import numpy as np
 
-from main import render_grid_image, write_grid_csv, write_palette_csv
+from main import (
+    build_parser,
+    default_output_directory_path,
+    render_grid_image,
+    write_grid_csv,
+    write_palette_csv,
+)
+
+
+class CliTests(unittest.TestCase):
+    def test_default_output_directory_path_includes_input_and_parameters(self) -> None:
+        self.assertEqual(
+            default_output_directory_path(
+                Path("images/ranunculus.jpg"),
+                rows=40,
+                columns=60,
+                colors=10,
+                algorithm="kmeans-lab",
+            ),
+            Path("outputs/ranunculus/40x60-10colors-kmeans-lab"),
+        )
+
+    def test_output_directory_argument_defaults_to_none(self) -> None:
+        args = build_parser().parse_args(
+            ["ranunculus.jpg", "40", "60", "10", "kmeans-lab"]
+        )
+
+        self.assertIsNone(args.output_directory_path)
+
+    def test_output_dir_flag_overrides_default_path(self) -> None:
+        args = build_parser().parse_args(
+            [
+                "ranunculus.jpg",
+                "40",
+                "60",
+                "10",
+                "kmeans-lab",
+                "--output-dir",
+                "experiments/manual",
+            ]
+        )
+
+        self.assertEqual(args.output_directory_path, Path("experiments/manual"))
 
 
 class OutputTests(unittest.TestCase):

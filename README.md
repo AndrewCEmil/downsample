@@ -11,7 +11,7 @@ uv sync
 ## Run
 
 ```bash
-uv run python main.py
+uv run python main.py ranunculus.jpg 40 60 10 kmeans-lab
 ```
 
 ## Add dependencies

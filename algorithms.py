@@ -22,6 +22,79 @@ class Algorithm:
 
 KMEANS_MAX_ITERATIONS = 100
 KMEANS_RANDOM_SEED = 0
+CIELAB_DELTA = 6 / 29
+XYZ_D65_WHITE = np.array([0.95047, 1.0, 1.08883])
+RGB_TO_XYZ_MATRIX = np.array(
+    [
+        [0.4124564, 0.3575761, 0.1804375],
+        [0.2126729, 0.7151522, 0.0721750],
+        [0.0193339, 0.1191920, 0.9503041],
+    ]
+)
+XYZ_TO_RGB_MATRIX = np.array(
+    [
+        [3.2404542, -1.5371385, -0.4985314],
+        [-0.9692660, 1.8760108, 0.0415560],
+        [0.0556434, -0.2040259, 1.0572252],
+    ]
+)
+
+
+def _srgb_to_linear(colors: np.ndarray) -> np.ndarray:
+    colors = np.asarray(colors)
+    return np.where(
+        colors <= 0.04045,
+        colors / 12.92,
+        ((colors + 0.055) / 1.055) ** 2.4,
+    )
+
+
+def _linear_to_srgb(colors: np.ndarray) -> np.ndarray:
+    colors = np.asarray(colors)
+    nonnegative_colors = np.maximum(colors, 0.0)
+    return np.where(
+        nonnegative_colors <= 0.0031308,
+        12.92 * nonnegative_colors,
+        1.055 * (nonnegative_colors ** (1 / 2.4)) - 0.055,
+    )
+
+
+def rgb_to_lab(colors: np.ndarray) -> np.ndarray:
+    linear_rgb = _srgb_to_linear(np.clip(colors, 0.0, 1.0))
+    xyz = linear_rgb @ RGB_TO_XYZ_MATRIX.T
+    normalized_xyz = xyz / XYZ_D65_WHITE
+
+    delta_cubed = CIELAB_DELTA**3
+    transformed = np.where(
+        normalized_xyz > delta_cubed,
+        np.cbrt(normalized_xyz),
+        normalized_xyz / (3 * CIELAB_DELTA**2) + 4 / 29,
+    )
+
+    return np.stack(
+        [
+            116 * transformed[..., 1] - 16,
+            500 * (transformed[..., 0] - transformed[..., 1]),
+            200 * (transformed[..., 1] - transformed[..., 2]),
+        ],
+        axis=-1,
+    )
+
+
+def lab_to_rgb(colors: np.ndarray) -> np.ndarray:
+    lightness = colors[..., 0]
+    fy = (lightness + 16) / 116
+    fx = fy + colors[..., 1] / 500
+    fz = fy - colors[..., 2] / 200
+    transformed = np.stack([fx, fy, fz], axis=-1)
+
+    xyz = XYZ_D65_WHITE * np.where(
+        transformed > CIELAB_DELTA,
+        transformed**3,
+        3 * CIELAB_DELTA**2 * (transformed - 4 / 29),
+    )
+    linear_rgb = xyz @ XYZ_TO_RGB_MATRIX.T
+    return np.clip(_linear_to_srgb(linear_rgb), 0.0, 1.0)
 
 
 def representative_grid_colors(
@@ -56,14 +129,7 @@ def representative_grid_colors(
     return cell_colors
 
 
-def sample_kmeans_rgb_palette(
-    image_data: np.ndarray,
-    colors: int,
-    rows: int,
-    columns: int,
-) -> np.ndarray:
-    points = representative_grid_colors(image_data, rows, columns).reshape(-1, 3)
-
+def _sample_kmeans_palette(points: np.ndarray, colors: int) -> np.ndarray:
     if colors > len(points):
         raise ValueError("colors must be less than or equal to rows * columns")
 
@@ -101,6 +167,28 @@ def sample_kmeans_rgb_palette(
             break
 
     return centers
+
+
+def sample_kmeans_rgb_palette(
+    image_data: np.ndarray,
+    colors: int,
+    rows: int,
+    columns: int,
+) -> np.ndarray:
+    points = representative_grid_colors(image_data, rows, columns).reshape(-1, 3)
+    return _sample_kmeans_palette(points, colors)
+
+
+def sample_kmeans_lab_palette(
+    image_data: np.ndarray,
+    colors: int,
+    rows: int,
+    columns: int,
+) -> np.ndarray:
+    rgb_points = representative_grid_colors(image_data, rows, columns).reshape(-1, 3)
+    lab_points = rgb_to_lab(rgb_points)
+    lab_palette = _sample_kmeans_palette(lab_points, colors)
+    return lab_to_rgb(lab_palette).astype(image_data.dtype, copy=False)
 
 
 def sample_median_cut_palette(
@@ -162,8 +250,31 @@ def assign_nearest_rgb_grid(
     return grid
 
 
+def assign_nearest_lab_grid(
+    image_data: np.ndarray,
+    palette: np.ndarray,
+    rows: int,
+    columns: int,
+) -> np.ndarray:
+    grid = np.empty((rows, columns), dtype=np.int64)
+    cell_colors = representative_grid_colors(image_data, rows, columns)
+    lab_palette = rgb_to_lab(palette)
+    lab_cell_colors = rgb_to_lab(cell_colors)
+
+    for row in range(rows):
+        for column in range(columns):
+            distances = np.sum(
+                (lab_palette - lab_cell_colors[row, column]) ** 2,
+                axis=1,
+            )
+            grid[row, column] = int(np.argmin(distances))
+
+    return grid
+
+
 ALGORITHMS: dict[str, Algorithm] = {
     "kmeans-rgb": Algorithm(sample_kmeans_rgb_palette, assign_nearest_rgb_grid),
+    "kmeans-lab": Algorithm(sample_kmeans_lab_palette, assign_nearest_lab_grid),
     "median-cut": Algorithm(sample_median_cut_palette, assign_nearest_rgb_grid),
     "pillow": Algorithm(sample_pillow_palette, assign_nearest_rgb_grid),
 }

@@ -9,6 +9,7 @@ from algorithms import algorithm_names, run_algorithm
 
 
 RENDER_CELL_SIZE = 32
+DEFAULT_OUTPUT_ROOT = Path("outputs")
 RENDER_FILENAME = "render.png"
 PALETTE_FILENAME = "palette.csv"
 GRID_FILENAME = "grid.csv"
@@ -80,17 +81,26 @@ def write_outputs(output_directory_path: Path, palette: np.ndarray, grid: np.nda
     write_grid_csv(output_directory_path / GRID_FILENAME, grid)
 
 
+def default_output_directory_path(
+    input_image_path: Path,
+    rows: int,
+    columns: int,
+    colors: int,
+    algorithm: str,
+) -> Path:
+    return (
+        DEFAULT_OUTPUT_ROOT
+        / input_image_path.stem
+        / f"{rows}x{columns}-{colors}colors-{algorithm}"
+    )
+
+
 def build_parser() -> ArgumentParser:
     parser = ArgumentParser(description="Downsample an image into a structured color grid.")
     parser.add_argument(
         "input_image_path",
         type=Path,
         help="Path to the input image file.",
-    )
-    parser.add_argument(
-        "output_directory_path",
-        type=Path,
-        help="Directory for generated output files.",
     )
     parser.add_argument(
         "rows",
@@ -112,6 +122,12 @@ def build_parser() -> ArgumentParser:
         choices=algorithm_names(),
         help="Downsampling algorithm to use.",
     )
+    parser.add_argument(
+        "--output-dir",
+        dest="output_directory_path",
+        type=Path,
+        help="Directory for generated output files.",
+    )
     return parser
 
 
@@ -126,11 +142,18 @@ def main() -> None:
         args.columns,
     )
 
-    args.output_directory_path.mkdir(parents=True, exist_ok=True)
-    write_outputs(args.output_directory_path, result.palette, result.grid)
+    output_directory_path = args.output_directory_path or default_output_directory_path(
+        args.input_image_path,
+        args.rows,
+        args.columns,
+        args.colors,
+        args.algorithm,
+    )
+    output_directory_path.mkdir(parents=True, exist_ok=True)
+    write_outputs(output_directory_path, result.palette, result.grid)
     print(
         "Processed "
-        f"{args.input_image_path} -> {args.output_directory_path} "
+        f"{args.input_image_path} -> {output_directory_path} "
         f"({args.rows} rows, {args.columns} columns, {args.colors} colors, "
         f"{args.algorithm} algorithm, {image_data.shape} image, "
         f"{result.palette.shape} palette, {result.grid.shape} grid; "
