@@ -4,6 +4,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from algorithms import algorithm_names, run_algorithm
+
 
 def positive_int(value: str) -> int:
     try:
@@ -52,7 +54,7 @@ def build_parser() -> ArgumentParser:
     )
     parser.add_argument(
         "algorithm",
-        choices=("kmeans-rgb", "median-cut", "pillow"),
+        choices=algorithm_names(),
         help="Downsampling algorithm to use.",
     )
     return parser
@@ -61,13 +63,21 @@ def build_parser() -> ArgumentParser:
 def main() -> None:
     args = build_parser().parse_args()
     image_data = load_rgb_image(args.input_image_path)
+    result = run_algorithm(
+        args.algorithm,
+        image_data,
+        args.colors,
+        args.rows,
+        args.columns,
+    )
 
     args.output_directory_path.mkdir(parents=True, exist_ok=True)
     print(
-        "Ready to process "
+        "Processed "
         f"{args.input_image_path} -> {args.output_directory_path} "
         f"({args.rows} rows, {args.columns} columns, {args.colors} colors, "
-        f"{args.algorithm} algorithm, {image_data.shape} image)"
+        f"{args.algorithm} algorithm, {image_data.shape} image, "
+        f"{result.palette.shape} palette, {result.grid.shape} grid)"
     )
 
 
