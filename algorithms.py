@@ -109,7 +109,31 @@ def sample_median_cut_palette(
     rows: int,
     columns: int,
 ) -> np.ndarray:
-    raise NotImplementedError("median-cut palette sampling is not implemented yet")
+    points = representative_grid_colors(image_data, rows, columns).reshape(-1, 3)
+
+    if colors > len(points):
+        raise ValueError("colors must be less than or equal to rows * columns")
+
+    boxes = [points]
+
+    while len(boxes) < colors:
+        split_index = max(
+            (index for index, box in enumerate(boxes) if len(box) > 1),
+            key=lambda index: (
+                float(np.ptp(boxes[index], axis=0).max()),
+                len(boxes[index]),
+                -index,
+            ),
+        )
+        box = boxes.pop(split_index)
+        split_channel = int(np.argmax(np.ptp(box, axis=0)))
+        sorted_box = box[np.argsort(box[:, split_channel], kind="mergesort")]
+        midpoint = len(sorted_box) // 2
+
+        boxes.append(sorted_box[:midpoint])
+        boxes.append(sorted_box[midpoint:])
+
+    return np.array([box.mean(axis=0) for box in boxes], dtype=points.dtype)
 
 
 def sample_pillow_palette(
