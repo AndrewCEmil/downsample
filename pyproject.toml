@@ -1,0 +1,7 @@
+[project]
+name = "downsample"
+version = "0.1.0"
+description = "Small image manipulation workflows."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
